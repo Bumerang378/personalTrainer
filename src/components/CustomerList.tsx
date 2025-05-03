@@ -199,7 +199,7 @@ const CustomerList = () => {
   }, [fetchCustomers]);
 
   return (
-    <Box> {/* Kääritään koko komponentti Boxiin paddingia varten */}
+    <Box sx={{ height: '100%', width: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Typography variant="h4" gutterBottom>Asiakkaat</Typography>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
@@ -221,8 +221,8 @@ const CustomerList = () => {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <TableContainer component={Paper}>
-        <Table stickyHeader> {/* Sticky header voi olla hyödyllinen pitkissä listoissa */}
+      <TableContainer component={Paper} sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <Table stickyHeader sx={{ minHeight: 0 }}>
           <TableHead>
             <TableRow>
               {columns.map((col) => (

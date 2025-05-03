@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://$USERNAME.github.io/personalTrainer",
+  "homepage": "https://bumerang378.github.io/personalTrainer",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -19,15 +19,18 @@
     "@mui/material": "^5.15.10",
     "@mui/x-date-pickers": "^6.19.4",
     "dayjs": "^1.11.10",
+    "lodash": "^4.17.21",
     "papaparse": "^5.5.2",
     "react": "^18.2.0",
     "react-big-calendar": "^1.8.4",
     "react-csv": "^2.2.2",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.1",
+    "recharts": "^2.15.3",
     "timezone": "^1.0.23"
   },
   "devDependencies": {
+    "@types/lodash": "^4.17.16",
     "@types/react": "^18.2.55",
     "@types/react-big-calendar": "^1.16.1",
     "@types/react-csv": "^1.1.10",

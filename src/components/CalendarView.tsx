@@ -143,9 +143,10 @@ const CalendarView = () => {
     <Box sx={{ 
       display: 'flex', 
       flexDirection: 'column',
-      height: '100vh',
+      height: '100%',
       width: '100%',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      minHeight: 0
     }}>
       <AppBar position="static" color="default" elevation={1}>
         <Toolbar sx={{ 
@@ -198,7 +199,8 @@ const CalendarView = () => {
           m: { xs: 1, sm: 2 },
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          minHeight: 0
         }}>
           <Calendar
             localizer={localizer}

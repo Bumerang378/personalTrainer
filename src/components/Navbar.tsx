@@ -19,8 +19,9 @@ Harjoitukset
 <Button color="inherit" component={RouterLink} to="/calendar">
 Kalenteri
 </Button>
-{/* Lisää linkki tilastosivulle (Osa 5) myöhemmin, esim. */}
-{/* <Button color="inherit" component={RouterLink} to="/stats">Tilastot</Button> */}
+<Button color="inherit" component={RouterLink} to="/stats">
+Tilastot
+</Button>
 </Toolbar>
 </AppBar>
 );

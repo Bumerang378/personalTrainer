@@ -230,11 +230,10 @@ const TrainingList = () => {
   }, [fetchCustomers, fetchTrainings]);
 
   return (
-    <Box> {/* Kääritään Boxiin */}
+    <Box sx={{ height: '100%', width: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Typography variant="h4" gutterBottom>Harjoitukset</Typography>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-        {/* Lisätty hakukenttä */}
         <TextField
             label="Hae aktiviteetti, asiakas, pvm..."
             value={search}
@@ -253,11 +252,10 @@ const TrainingList = () => {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <TableContainer component={Paper}>
-        <Table stickyHeader>
+      <TableContainer component={Paper} sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <Table stickyHeader sx={{ minHeight: 0 }}>
           <TableHead>
             <TableRow>
-              {/* Generoidaan otsikot columns-määrittelystä */}
               {columns.map((col) => (
                  <TableCell
                     key={col.key}
@@ -271,8 +269,7 @@ const TrainingList = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-             {/* Käytetään prosessoitua listaa */}
-            {processedTrainings.map(t => (
+             {processedTrainings.map(t => (
               <TableRow key={t.id} hover>
                 {columns.map(col => (
                     <TableCell key={`${t.id}-${col.key}`}>
@@ -302,11 +299,10 @@ const TrainingList = () => {
         </Table>
       </TableContainer>
 
-      {/* Dialogi */}
       <AddTrainingDialog
         open={dialogOpen}
         onClose={handleCloseDialog}
-        onSave={handleAddTraining} // Välitetään async handler
+        onSave={handleAddTraining}
         customers={customers}
       />
     </Box>
