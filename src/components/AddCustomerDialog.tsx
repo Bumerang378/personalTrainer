@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button } from '@mui/material';
 
-// Käytetään tyyppiä, joka sisältää optionaalisen ID:n
+// ASIAKAS ASIAKAS ASIAKAS ASIAKAS 
 type Customer = {
   id?: number;
   firstname: string;
