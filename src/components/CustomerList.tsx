@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  TextField, Typography, Alert, Button, Box, IconButton
+  TextField, Typography, Alert, Button, Box, IconButton, CircularProgress
 } from '@mui/material';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
@@ -10,8 +10,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { CSVLink } from 'react-csv';
 
-// Tuodaan dialogikomponentti
 import AddCustomerDialog from './AddCustomerDialog';
+import ConfirmationDialog from './ConfirmationDialog'; // Assuming this file is in the same directory
 
 type Customer = {
   id: number;
@@ -22,6 +22,17 @@ type Customer = {
   postcode?: string;
   city?: string;
   phone?: string;
+  _links?: { // Added _links based on typical Spring HATEOAS structure
+    self: {
+        href: string;
+    };
+    customer?: { // Optional, depending on API structure
+        href: string;
+    };
+    trainings?: { // Optional, depending on API structure
+        href: string;
+    };
+  };
 };
 
 const SortIndicator = ({ direction }: { direction: 'ascending' | 'descending' | null }) => {
@@ -33,6 +44,7 @@ const CustomerList = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Customer | null; direction: 'ascending' | 'descending' }>({
     key: null,
     direction: 'ascending'
@@ -40,77 +52,125 @@ const CustomerList = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
-  // --- API Functions ---
+  // State for delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+
+  const API_URL = 'https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api/customers';
+
   const fetchCustomers = useCallback(async () => {
+    setLoading(true);
     setError(null);
     try {
-      const response = await fetch('https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api/customers');
+      const response = await fetch(API_URL);
       if (!response.ok) throw new Error('Network response was not ok');
       const data = await response.json();
       setCustomers(data._embedded?.customers || []);
     } catch (err: any) {
+      console.error("Fetch error:", err);
       setError("Tietojen haku epäonnistui.");
+    } finally {
+        setLoading(false);
     }
   }, []);
 
-  const addCustomer = async (customerData: Omit<Customer, 'id'>) => {
+  const addCustomer = async (customerData: Omit<Customer, 'id' | '_links'>) => {
+    setLoading(true);
     setError(null);
     try {
-      const response = await fetch('https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api/customers', {
+      const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(customerData)
       });
-      if (!response.ok) throw new Error('Failed to add customer');
+      if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Add failed:", response.status, errorText);
+          throw new Error(`Failed to add customer: ${response.status}`);
+      }
       await fetchCustomers();
-    } catch (err) {
+    } catch (err: any) {
+      console.error("Add error:", err);
       setError("Asiakkaan lisäys epäonnistui.");
+      throw err;
+    } finally {
+        setLoading(false);
     }
   };
 
   const updateCustomer = async (customerData: Customer) => {
+    setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api/customers/${customerData.id}`, {
+      const customerToUpdate = customers.find(c => c.id === customerData.id);
+      const customerLink = customerToUpdate?._links?.self?.href;
+
+      if (!customerLink) {
+           console.error("Update failed: Customer link not found for ID", customerData.id);
+           throw new Error("Failed to update customer: Customer not found or link missing");
+      }
+
+      // API likely requires data without _links for PUT
+      const { _links, ...dataWithoutLinks } = customerData;
+
+      const response = await fetch(customerLink, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(customerData)
+        body: JSON.stringify(dataWithoutLinks)
       });
-      if (!response.ok) throw new Error('Failed to update customer');
+      if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Update failed:", response.status, errorText);
+          throw new Error(`Failed to update customer: ${response.status}`);
+      }
       await fetchCustomers();
-    } catch (err) {
-      setError("Asiakkaan päivitys epäonnistui.");
+    } catch (err: any) {
+       console.error("Update error:", err);
+       setError("Asiakkaan päivitys epäonnistui.");
+       throw err;
+    } finally {
+        setLoading(false);
     }
   };
 
-  const deleteCustomer = async (id: number) => {
+  // API call for deletion (called after confirmation)
+  const deleteCustomer = async (customerLink: string) => {
+    setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`https://customer-rest-service-frontend-personaltrainer.2.rahtiapp.fi/api/customers/${id}`, {
+      const response = await fetch(customerLink, {
         method: 'DELETE'
       });
-      if (!response.ok && response.status !== 204) throw new Error('Failed to delete customer');
-      await fetchCustomers();
-    } catch (err) {
+      if (!response.ok && response.status !== 204) {
+           const errorText = await response.text();
+           console.error("Delete failed:", response.status, errorText);
+           throw new Error(`Failed to delete customer: ${response.status}`);
+      }
+      await fetchCustomers(); // Refresh list on success
+    } catch (err: any) {
+      console.error("Delete error:", err);
       setError("Asiakkaan poisto epäonnistui.");
+      throw err;
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Prosessoitu data (suodatus ja sorttaus)
   const processedCustomers = useMemo(() => {
     let filtered = [...customers];
     if (search) {
       const term = search.toLowerCase();
       filtered = filtered.filter(c =>
         Object.values(c).some(val =>
-            String(val).toLowerCase().includes(term)
-        ) // Yleistetty haku kaikista kentistä
+            val != null && String(val).toLowerCase().includes(term)
+        )
       );
     }
     if (sortConfig.key !== null) {
        filtered.sort((a, b) => {
         const aValue = a[sortConfig.key!] ?? '';
         const bValue = b[sortConfig.key!] ?? '';
+
         if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
         if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
@@ -119,7 +179,6 @@ const CustomerList = () => {
     return filtered;
   }, [customers, search, sortConfig]);
 
-  // Sorttauspyyntö
   const requestSort = (key: keyof Customer) => {
     let direction: 'ascending' | 'descending' = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -128,7 +187,7 @@ const CustomerList = () => {
     setSortConfig({ key, direction });
   };
 
-  // --- Käsittelijät ---
+  // --- Handlers for Dialog and CRUD operations ---
   const handleOpenDialog = (customer: Customer | null = null) => {
     setEditingCustomer(customer);
     setDialogOpen(true);
@@ -137,31 +196,58 @@ const CustomerList = () => {
     setDialogOpen(false);
     setEditingCustomer(null);
   };
-  const handleSave = async (customerData: Omit<Customer, 'id'> | Customer) => {
+
+  const handleSave = async (customerData: Omit<Customer, 'id' | '_links'> | Customer) => {
     try {
       setError(null);
-      if ('id' in customerData && customerData.id) {
+      if ('id' in customerData && customerData.id != null) {
         await updateCustomer(customerData as Customer);
       } else {
         await addCustomer(customerData);
       }
       handleCloseDialog();
     } catch (err) {
-      setError("Tallennus epäonnistui.");
-    }
-  };
-  const handleDelete = async (id: number, name: string) => {
-    if (window.confirm(`Haluatko varmasti poistaa asiakkaan ${name}?`)) {
-      try {
-        setError(null);
-        await deleteCustomer(id);
-      } catch (err) {
-        setError("Poisto epäonnistui.");
-      }
+      console.log("Save operation failed in handleSave");
+      // Error is already set in add/updateCustomer
     }
   };
 
-  // Sarakemäärittelyt taulukolle JA CSV-viennille
+  // --- Handlers for Delete Confirmation Dialog ---
+
+  const handleDeleteClick = (customer: Customer) => {
+    setCustomerToDelete(customer);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!customerToDelete) return;
+
+    const customerLink = (customerToDelete as any)._links?.self.href; // Assuming _links exists
+
+    if (!customerLink) {
+        setError("Poisto epäonnistui: Asiakkaan linkkiä ei löytynyt.");
+        setDeleteDialogOpen(false);
+        setCustomerToDelete(null);
+        return;
+    }
+
+    try {
+        await deleteCustomer(customerLink);
+        // fetchCustomers() is called inside deleteCustomer on success
+    } catch (err) {
+        console.log("Delete operation failed in handleDeleteConfirm");
+        // Error is already set in deleteCustomer
+    } finally {
+        setDeleteDialogOpen(false);
+        setCustomerToDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setCustomerToDelete(null);
+  };
+
    const columns: { key: keyof Customer | 'actions'; label: string; sortable?: boolean }[] = [
         { key: 'firstname', label: 'Etunimi', sortable: true },
         { key: 'lastname', label: 'Sukunimi', sortable: true },
@@ -173,26 +259,27 @@ const CustomerList = () => {
         { key: 'actions', label: 'Toiminnot', sortable: false }
     ];
 
-   // --- CSV Export Määrittelyt ---
     const csvHeaders = useMemo(() => columns
-        .filter(col => col.key !== 'actions' && col.key !== 'id') // Suodata actions ja id pois
+        .filter(col => col.key !== 'actions' && col.key !== 'id' && col.key !== '_links')
         .map(col => ({ label: col.label, key: col.key as string })),
     [columns]
     );
 
     const csvData = useMemo(() => {
         return processedCustomers.map(c => {
-             // Luodaan objekti vain vientiin halutuilla kentillä
              const exportCustomer: Partial<Record<keyof Customer, any>> = {};
              csvHeaders.forEach(header => {
-                 exportCustomer[header.key as keyof Customer] = c[header.key as keyof Customer] ?? '';
+                 if (header.key in c) {
+                    exportCustomer[header.key as keyof Customer] = (c as any)[header.key] ?? '';
+                 } else {
+                     exportCustomer[header.key as keyof Customer] = '';
+                 }
              });
              return exportCustomer;
         });
     }, [processedCustomers, csvHeaders]);
 
     const csvFilename = "asiakkaat_export.csv";
-  // --- CSV Export loppu ---
 
   useEffect(() => {
     fetchCustomers();
@@ -204,13 +291,13 @@ const CustomerList = () => {
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
          <TextField
-            label="Hae kaikista kentistä..." // Yleistetty haku
+            label="Hae kaikista kentistä..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             sx={{ width: { xs: '100%', sm: 'auto' }, flexGrow: 1, mr: { sm: 2 } }}
         />
-         <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}> {/* Painikkeet vierekkäin */}
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()} >
+         <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()} disabled={loading}>
                 Lisää asiakas
             </Button>
              <CSVLink data={csvData} headers={csvHeaders} filename={csvFilename} style={{ textDecoration: 'none' }} target="_blank" >
@@ -221,61 +308,75 @@ const CustomerList = () => {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <TableContainer component={Paper} sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <Table stickyHeader sx={{ minHeight: 0 }}>
-          <TableHead>
-            <TableRow>
-              {columns.map((col) => (
-                <TableCell
-                  key={col.key}
-                  onClick={() => col.sortable ? requestSort(col.key as keyof Customer) : null}
-                  sx={{ cursor: col.sortable ? 'pointer' : 'default', fontWeight: 'bold' }}
-                >
-                  {col.label}
-                  {col.sortable && <SortIndicator direction={sortConfig.key === col.key ? sortConfig.direction : null} />}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {processedCustomers.map(c => (
-              <TableRow key={c.id} hover>
-                {columns.map(col => (
-                  <TableCell key={`${c.id}-${col.key}`}>
-                    {col.key === 'actions' ? (
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <IconButton aria-label="muokkaa" size="small" color="primary" onClick={() => handleOpenDialog(c)} >
-                          <EditIcon fontSize="inherit"/>
-                        </IconButton>
-                        <IconButton aria-label="poista" size="small" color="error" onClick={() => handleDelete(c.id, `${c.firstname} ${c.lastname}`)} >
-                          <DeleteIcon fontSize="inherit"/>
-                        </IconButton>
-                      </Box>
-                    ) : (
-                      c[col.key as keyof Customer] ?? '-'
-                    )}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-            {/* Näytä viesti jos dataa ei ole (suodatuksen jälkeen) */}
-            {processedCustomers.length === 0 && !error && (
-              <TableRow>
-                <TableCell colSpan={columns.length} align="center">
-                  Ei hakutuloksia tai asiakkaita ei ole lisätty.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress />
+          </Box>
+      )}
 
-      {/* Dialogi */}
+      {!loading && (
+          <TableContainer component={Paper} sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <Table stickyHeader sx={{ minHeight: 0 }}>
+              <TableHead>
+                <TableRow>
+                  {columns.map((col) => (
+                    <TableCell
+                      key={col.key}
+                      onClick={() => col.sortable ? requestSort(col.key as keyof Customer) : null}
+                      sx={{ cursor: col.sortable ? 'pointer' : 'default', fontWeight: 'bold' }}
+                    >
+                      {col.label}
+                      {col.sortable && <SortIndicator direction={sortConfig.key === col.key ? sortConfig.direction : null} />}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {processedCustomers.map(c => (
+                  <TableRow key={c.id} hover>
+                    {columns.map(col => (
+                      <TableCell key={`${c.id}-${col.key}`}>
+                        {col.key === 'actions' ? (
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <IconButton aria-label="muokkaa" size="small" color="primary" onClick={() => handleOpenDialog(c)} disabled={loading}>
+                              <EditIcon fontSize="inherit"/>
+                            </IconButton>
+                            <IconButton aria-label="poista" size="small" color="error" onClick={() => handleDeleteClick(c)} disabled={loading}>
+                              <DeleteIcon fontSize="inherit"/>
+                            </IconButton>
+                          </Box>
+                        ) : (
+                          (c as any)[col.key] ?? '-'
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+                {processedCustomers.length === 0 && !error && !loading && (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} align="center">
+                      Ei hakutuloksia tai asiakkaita ei ole lisätty.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+      )}
+
       <AddCustomerDialog
         open={dialogOpen}
         onClose={handleCloseDialog}
         onSave={handleSave}
         initialData={editingCustomer}
+      />
+
+      <ConfirmationDialog
+        open={deleteDialogOpen}
+        title="Vahvista poisto"
+        message={`Haluatko varmasti poistaa asiakkaan ${customerToDelete?.firstname} ${customerToDelete?.lastname}?`}
+        onConfirm={handleDeleteConfirm}
+        onCancel={handleDeleteCancel}
       />
     </Box>
   );
